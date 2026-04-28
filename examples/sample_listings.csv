@@ -1,0 +1,8 @@
+listing_id,source,url,state,county,acres,price_usd,lat,lon,title,description,listed_on
+ls-0001,landsearch,https://example.com/ls-0001,MO,Texas,120,420000,37.30,-92.00,120 ac creek-fed pasture,Active spring + county-road frontage,2026-04-12
+ls-0002,landsearch,https://example.com/ls-0002,IA,Wapello,80,640000,41.00,-92.40,80 ac row-crop tract,Tile-drained corn/soy ground,2026-04-15
+ls-0003,landwatch,https://example.com/ls-0003,TX,Hopkins,200,1100000,33.20,-95.50,200 ac east TX ranch,Two ponds plus seasonal creek,2026-04-18
+ls-0004,landsearch,https://example.com/ls-0004,KS,Linn,160,560000,38.20,-94.70,160 ac mixed pasture/timber,Power line at road,2026-04-19
+ls-0005,landsearch,https://example.com/ls-0005,WY,Goshen,640,1280000,42.10,-104.80,640 ac dryland,Out of target states,2026-04-20
+ls-0006,landwatch,https://example.com/ls-0006,OH,Vinton,55,310000,39.30,-82.50,55 ac woodland,Mostly trees; limited tillable,2026-04-21
+ls-0007,landsearch,https://example.com/ls-0007,NC,Halifax,95,2150000,36.30,-77.60,95 ac irrigated tract,Premium pricing,2026-04-22

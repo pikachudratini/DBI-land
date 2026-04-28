@@ -1,0 +1,40 @@
+[project]
+name = "dbi-land"
+version = "0.1.0"
+description = "Nationwide farmland prospecting pipeline for a small nonprofit."
+requires-python = ">=3.11"
+dependencies = [
+    "pyyaml>=6.0",
+    "jinja2>=3.1",
+    "click>=8.1",
+    "requests>=2.31",
+    "beautifulsoup4>=4.12",
+]
+
+[project.optional-dependencies]
+geo = [
+    "shapely>=2.0",
+    "pyproj>=3.6",
+]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+]
+
+[project.scripts]
+dbi-land = "dbi_land.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dbi_land"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

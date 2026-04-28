@@ -1,0 +1,101 @@
+"""Scoring functions for the five MVP criteria.
+
+Each function returns a value in [0, 1]. A score of 0 means the criterion is
+violated (hard fail); higher is better. Heavy GIS-based criteria (water, road,
+power) are stubbed with neutral 0.5 scores until the GIS modules land in
+Week 2 — they read optional `extras` fields on the Listing if pre-computed
+externally.
+"""
+from __future__ import annotations
+
+from dbi_land.config import Criteria
+from dbi_land.models import CriterionScore, Listing
+
+
+def score_state(listing: Listing, criteria: Criteria) -> CriterionScore:
+    weight = criteria.weight("state", 1.0)
+    in_states = listing.state in criteria.states
+    excluded = listing.county and any(
+        ec.lower() == listing.county.lower() for ec in criteria.excluded_counties
+    )
+    if not in_states or excluded:
+        return CriterionScore(
+            "state", 0.0, weight, f"{listing.state}/{listing.county} not in target list"
+        )
+    return CriterionScore("state", 1.0, weight, f"{listing.state} matches")
+
+
+def score_acreage(listing: Listing, criteria: Criteria) -> CriterionScore:
+    weight = criteria.weight("acreage", 1.0)
+    band = criteria.best_band(listing.acres)
+    if band is None:
+        return CriterionScore(
+            "acreage", 0.0, weight, f"{listing.acres} ac outside any band"
+        )
+    span = max(band.max_acres - band.min_acres, 1.0)
+    midpoint = (band.min_acres + band.max_acres) / 2.0
+    distance_from_mid = abs(listing.acres - midpoint) / (span / 2.0)
+    score = max(0.0, 1.0 - 0.4 * distance_from_mid) * band.weight
+    return CriterionScore(
+        "acreage", min(score, 1.0), weight, f"{listing.acres} ac in band {band.min_acres}-{band.max_acres}"
+    )
+
+
+def score_price(listing: Listing, criteria: Criteria) -> CriterionScore:
+    weight = criteria.weight("price", 1.0)
+    ppa = listing.price_per_acre
+    cap_ppa = criteria.price.max_price_per_acre
+    cap_total = criteria.price.max_total_price
+    if listing.price_usd > cap_total or ppa > cap_ppa:
+        return CriterionScore(
+            "price", 0.0, weight, f"${ppa:,.0f}/ac total ${listing.price_usd:,.0f} exceeds cap"
+        )
+    headroom = 1.0 - (ppa / cap_ppa)
+    return CriterionScore("price", max(0.05, headroom), weight, f"${ppa:,.0f}/ac")
+
+
+def _extras_score(listing: Listing, key: str) -> float | None:
+    val = listing.extras.get(key)
+    if val is None:
+        return None
+    try:
+        v = float(val)
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, min(1.0, v))
+
+
+def score_water(listing: Listing, criteria: Criteria) -> CriterionScore:
+    weight = criteria.weight("water", 1.0)
+    s = _extras_score(listing, "water_score")
+    if s is None:
+        return CriterionScore("water", 0.5, weight, "no GIS data; neutral")
+    if s < criteria.min_water_score:
+        return CriterionScore("water", 0.0, weight, f"{s:.2f} below floor")
+    return CriterionScore("water", s, weight, f"{s:.2f}")
+
+
+def score_access(listing: Listing, criteria: Criteria) -> CriterionScore:
+    """Combined road access + power proximity, both from optional extras."""
+    weight = criteria.weight("access", 1.0)
+    road = _extras_score(listing, "road_access_score")
+    power = _extras_score(listing, "power_proximity_score")
+    parts = []
+    components: list[float] = []
+    if road is not None:
+        if road < criteria.min_road_access_score:
+            return CriterionScore("access", 0.0, weight, f"road {road:.2f} below floor")
+        components.append(road)
+        parts.append(f"road {road:.2f}")
+    if power is not None:
+        if power < criteria.min_power_proximity_score:
+            return CriterionScore("access", 0.0, weight, f"power {power:.2f} below floor")
+        components.append(power)
+        parts.append(f"power {power:.2f}")
+    if not components:
+        return CriterionScore("access", 0.5, weight, "no GIS data; neutral")
+    avg = sum(components) / len(components)
+    return CriterionScore("access", avg, weight, ", ".join(parts))
+
+
+ALL_CRITERIA = (score_state, score_acreage, score_price, score_water, score_access)
