@@ -8,7 +8,13 @@ import click
 from dbi_land.config import Criteria
 from dbi_land.digest import write_digest
 from dbi_land.email_sender import EmailConfig, send_digest
-from dbi_land.gis import PowerProximity, score_power_proximity
+from dbi_land.geocode import Geocoder
+from dbi_land.gis import (
+    PowerProximity,
+    WaterProximity,
+    score_power_proximity,
+    score_water_proximity,
+)
 from dbi_land.score import score_listings
 from dbi_land.sources import CsvSource, ImapConfig, ImapSource
 from dbi_land.storage import ListingStore
@@ -51,6 +57,10 @@ def _append_digested(path: Path, keys: list[str]) -> None:
 @click.option("--passing/--include-failing", default=True)
 @click.option("--power-geojson", default=None, type=click.Path(exists=True, dir_okay=False),
               help="Optional HIFLD-style transmission-line GeoJSON; enables the power score.")
+@click.option("--water-geojson", default=None, type=click.Path(exists=True, dir_okay=False),
+              help="Optional NHD-style perennial-flowline GeoJSON; enables the water score.")
+@click.option("--geocode/--no-geocode", default=False,
+              help="Geocode listings missing lat/lon via Nominatim before GIS scoring.")
 def run(
     criteria_path: str,
     csv_paths: tuple[str, ...],
@@ -60,6 +70,8 @@ def run(
     out_path: str,
     passing: bool,
     power_geojson: str | None,
+    water_geojson: str | None,
+    geocode: bool,
 ) -> None:
     """Score listings (from --csv or --store) and write the HTML digest."""
     criteria = Criteria.from_yaml(criteria_path)
@@ -79,9 +91,17 @@ def run(
         listings = [l for l in listings if f"{l.source}:{l.listing_id}" not in already]
         click.echo(f"--new-only: filtered {before - len(listings)} previously-digested listing(s).")
 
+    if geocode:
+        before_geo = sum(1 for l in listings if l.lat is None or l.lon is None)
+        listings = Geocoder().enrich(listings)
+        click.echo(f"Geocoded {before_geo} listing(s) without coordinates.")
+
     if power_geojson:
         pp = PowerProximity.from_geojson(power_geojson)
         listings = score_power_proximity(listings, pp)
+    if water_geojson:
+        wp = WaterProximity.from_geojson(water_geojson)
+        listings = score_water_proximity(listings, wp)
 
     click.echo(f"Scoring {len(listings)} listing(s).")
     scored = score_listings(listings, criteria, only_passing=passing)
