@@ -10,5 +10,7 @@ dist/
 build/
 data/cache/
 data/raw/
+data/listings.jsonl
+data/digested.txt
 out/
 *.log

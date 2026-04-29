@@ -1,0 +1,58 @@
+name: nightly-digest
+
+on:
+  schedule:
+    - cron: "0 11 * * *"  # 11:00 UTC = 06:00 CT, 07:00 ET
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Ingest IMAP
+        env:
+          DBI_IMAP_HOST: ${{ secrets.DBI_IMAP_HOST }}
+          DBI_IMAP_USER: ${{ secrets.DBI_IMAP_USER }}
+          DBI_IMAP_PASSWORD: ${{ secrets.DBI_IMAP_PASSWORD }}
+          DBI_IMAP_FOLDER: ${{ secrets.DBI_IMAP_FOLDER }}
+        run: |
+          dbi-land ingest-imap --store data/listings.jsonl
+
+      - name: Score and digest
+        run: |
+          dbi-land run \
+            --criteria examples/criteria.yaml \
+            --store data/listings.jsonl \
+            --new-only \
+            --out out/digest.html
+
+      - name: Send digest
+        env:
+          DBI_RESEND_API_KEY: ${{ secrets.DBI_RESEND_API_KEY }}
+          DBI_RESEND_FROM: ${{ secrets.DBI_RESEND_FROM }}
+          DBI_RESEND_TO: ${{ secrets.DBI_RESEND_TO }}
+        run: |
+          dbi-land send --html out/digest.html
+
+      - name: Persist store
+        run: |
+          if [ -n "$(git status --porcelain data/listings.jsonl)" ]; then
+            git config user.name  "dbi-land-bot"
+            git config user.email "dbi-land-bot@users.noreply.github.com"
+            git add data/listings.jsonl
+            git commit -m "store: append nightly listings"
+            git push
+          fi
