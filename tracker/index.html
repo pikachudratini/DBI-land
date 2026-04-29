@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DBI Land Search — Candidate Tracker</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>DBI Land Search — Candidate Tracker</h1>
+    <p class="sub">Score candidates against the 9 hard gates. Edit <code>data.js</code> to add or update properties; reload to recompute.</p>
+  </header>
+
+  <section class="filters">
+    <label>Region
+      <select id="filter-region">
+        <option value="">All</option>
+        <option value="ozarks">Ozarks (AR/MO)</option>
+        <option value="cumberland">Cumberland Plateau (TN/KY)</option>
+        <option value="ouachita">Ouachita Mountains (AR/OK)</option>
+        <option value="west-virginia">West Virginia / SW Virginia</option>
+        <option value="north-florida">North Florida</option>
+        <option value="other">Other</option>
+      </select>
+    </label>
+    <label>Min acres
+      <input type="number" id="filter-min-acres" placeholder="1000">
+    </label>
+    <label>Max price ($)
+      <input type="number" id="filter-max-price" placeholder="4000000">
+    </label>
+    <label>Status
+      <select id="filter-status">
+        <option value="">All</option>
+        <option value="qualified">Qualified (all 9 pass)</option>
+        <option value="contender">Contender (no fails, some unknown)</option>
+        <option value="disqualified">Disqualified (any fail)</option>
+      </select>
+    </label>
+    <button id="reset-filters" type="button">Reset</button>
+  </section>
+
+  <section class="summary" id="summary"></section>
+
+  <section class="table-wrap">
+    <table id="candidates">
+      <thead>
+        <tr>
+          <th data-sort="name">Name</th>
+          <th data-sort="region">Region</th>
+          <th data-sort="county">County, State</th>
+          <th data-sort="acres" class="num">Acres</th>
+          <th data-sort="asking_price_usd" class="num">Price</th>
+          <th data-sort="price_per_acre_usd" class="num">$/ac</th>
+          <th data-sort="passed">Gates</th>
+          <th data-sort="status">Status</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </section>
+
+  <section class="detail" id="detail" hidden></section>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
