@@ -6,6 +6,7 @@ from pathlib import Path
 import click
 
 from dbi_land.config import Criteria
+from dbi_land.dashboard import write_dashboard
 from dbi_land.digest import write_digest
 from dbi_land.email_sender import EmailConfig, send_digest
 from dbi_land.geocode import Geocoder
@@ -158,6 +159,19 @@ def send(html_path: str, subject: str, dry_run: bool) -> None:
     html = Path(html_path).read_text(encoding="utf-8")
     result = send_digest(cfg, subject=subject, html=html)
     click.echo(f"Resend status: {result.get('status')}")
+
+
+@main.command()
+@click.option("--criteria", "criteria_path", required=True,
+              type=click.Path(exists=True, dir_okay=False))
+@click.option("--store", "store_path", default="data/listings.jsonl", show_default=True,
+              type=click.Path(exists=True, dir_okay=False))
+@click.option("--out", "out_path", default="site/index.html", show_default=True,
+              type=click.Path(dir_okay=False))
+def dashboard(criteria_path: str, store_path: str, out_path: str) -> None:
+    """Render a static history dashboard with client-side filters."""
+    out = write_dashboard(store_path, criteria_path, out_path)
+    click.echo(f"Wrote dashboard -> {out}")
 
 
 @main.command("show-criteria")
