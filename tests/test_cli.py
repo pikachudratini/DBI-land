@@ -29,6 +29,7 @@ def test_run_against_csv(tmp_path):
             "--csv", str(EXAMPLES / "sample_listings.csv"),
             "--out", str(out),
             "--digested", str(digested),
+            "--max-stale-days", "0",  # disable freshness filter (no scrape ran)
         ],
     )
     assert result.exit_code == 0, result.output
@@ -59,6 +60,7 @@ def test_ingest_csv_then_run_new_only_filters(tmp_path):
             "--new-only",
             "--out", str(out),
             "--digested", str(digested),
+            "--max-stale-days", "0",
         ],
     )
     assert r2.exit_code == 0, r2.output
@@ -73,6 +75,7 @@ def test_ingest_csv_then_run_new_only_filters(tmp_path):
             "--new-only",
             "--out", str(out),
             "--digested", str(digested),
+            "--max-stale-days", "0",
         ],
     )
     assert r3.exit_code == 0, r3.output

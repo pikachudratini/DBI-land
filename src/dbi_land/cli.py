@@ -11,6 +11,7 @@ from dbi_land.dedupe import dedupe_cross_source
 from dbi_land.digest import write_digest
 from dbi_land.elevation import ElevationEnricher
 from dbi_land.email_sender import EmailConfig, send_digest
+from dbi_land.freshness import LastSeenIndex
 from dbi_land.geocode import Geocoder
 from dbi_land.gis import (
     PowerProximity,
@@ -72,6 +73,12 @@ def _append_digested(path: Path, keys: list[str]) -> None:
 @click.option("--passing/--include-failing", default=True)
 @click.option("--dedupe/--no-dedupe", default=True,
               help="Collapse cross-source duplicates (same state/county/acres/price).")
+@click.option("--max-stale-days", default=14, show_default=True, type=int,
+              help="Drop listings not re-confirmed by a scrape within this window. "
+                   "Set to 0 to disable freshness filtering.")
+@click.option("--last-seen", "last_seen_path", default="data/last_seen.json",
+              show_default=True, type=click.Path(dir_okay=False),
+              help="Path to the LastSeenIndex JSON file written by scrape-* commands.")
 @click.option("--power-geojson", default=None, type=click.Path(exists=True, dir_okay=False),
               help="Optional HIFLD-style transmission-line GeoJSON; enables the power score.")
 @click.option("--tower-geojson", default=None, type=click.Path(exists=True, dir_okay=False),
@@ -92,6 +99,8 @@ def run(
     out_path: str,
     passing: bool,
     dedupe: bool,
+    max_stale_days: int,
+    last_seen_path: str,
     power_geojson: str | None,
     tower_geojson: str | None,
     water_geojsons: tuple[str, ...],
@@ -113,6 +122,15 @@ def run(
         listings, dropped = dedupe_cross_source(listings)
         if dropped:
             click.echo(f"Dedupe: collapsed {dropped} cross-source duplicate(s).")
+
+    if max_stale_days > 0:
+        idx = LastSeenIndex(last_seen_path)
+        before_freshness = len(listings)
+        listings, stale = idx.filter_active(listings, max_stale_days=max_stale_days)
+        click.echo(
+            f"Freshness: dropped {stale} listing(s) not re-seen in last "
+            f"{max_stale_days} day(s); {len(listings)} active of {before_freshness}."
+        )
 
     digested_file = Path(digested_path)
     if new_only:
@@ -206,8 +224,13 @@ def scrape_landsearch(
     cfg = LandSearchScraperConfig(max_pages_per_state=max_pages)
     scraper = LandSearchScraper(state_codes, config=cfg)
     store = ListingStore(store_path)
-    new = store.upsert(scraper.fetch())
-    click.echo(f"Scraped {len(state_codes)} state(s); +{len(new)} new listing(s) -> {store_path}")
+    fetched = list(scraper.fetch())
+    new = store.upsert(fetched)
+    LastSeenIndex("data/last_seen.json").touch(fetched)
+    click.echo(
+        f"Scraped {len(state_codes)} state(s); +{len(new)} new, "
+        f"{len(fetched)} confirmed active -> {store_path}"
+    )
 
 
 @main.command("scrape-landandfarm")
@@ -236,10 +259,12 @@ def scrape_landandfarm(
     cfg = LandAndFarmScraperConfig(min_acres=min_acres, max_pages_per_state=max_pages)
     scraper = LandAndFarmScraper(state_codes, config=cfg)
     store = ListingStore(store_path)
-    new = store.upsert(scraper.fetch())
+    fetched = list(scraper.fetch())
+    new = store.upsert(fetched)
+    LastSeenIndex("data/last_seen.json").touch(fetched)
     click.echo(
         f"Scraped {len(state_codes)} state(s) (min {min_acres} ac); "
-        f"+{len(new)} new listing(s) -> {store_path}"
+        f"+{len(new)} new, {len(fetched)} confirmed active -> {store_path}"
     )
 
 
@@ -269,10 +294,12 @@ def scrape_landwatch(
     cfg = LandWatchScraperConfig(min_acres=min_acres, max_pages_per_state=max_pages)
     scraper = LandWatchScraper(state_codes, config=cfg)
     store = ListingStore(store_path)
-    new = store.upsert(scraper.fetch())
+    fetched = list(scraper.fetch())
+    new = store.upsert(fetched)
+    LastSeenIndex("data/last_seen.json").touch(fetched)
     click.echo(
         f"Scraped {len(state_codes)} state(s) (min {min_acres} ac); "
-        f"+{len(new)} new listing(s) -> {store_path}"
+        f"+{len(new)} new, {len(fetched)} confirmed active -> {store_path}"
     )
 
 
