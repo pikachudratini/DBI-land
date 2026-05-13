@@ -16,6 +16,10 @@ geo = [
     "shapely>=2.0",
     "pyproj>=3.6",
 ]
+scrape = [
+    "playwright>=1.50",
+    "playwright-stealth>=2.0",
+]
 dev = [
     "pytest>=8.0",
     "ruff>=0.5",

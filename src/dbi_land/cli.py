@@ -20,7 +20,17 @@ from dbi_land.gis import (
     score_water_proximity,
 )
 from dbi_land.score import score_listings
-from dbi_land.sources import CsvSource, ImapConfig, ImapSource
+from dbi_land.sources import (
+    CsvSource,
+    ImapConfig,
+    ImapSource,
+    LandSearchScraper,
+    LandSearchScraperConfig,
+    LandWatchScraper,
+    LandWatchScraperConfig,
+    LandAndFarmScraper,
+    LandAndFarmScraperConfig,
+)
 from dbi_land.storage import ListingStore
 
 
@@ -164,6 +174,97 @@ def ingest_csv(store_path: str, csv_paths: tuple[str, ...]) -> None:
         click.echo(f"  {p}: +{len(new)} new")
         total += len(new)
     click.echo(f"Ingested {total} new listing(s) -> {store_path}")
+
+
+@main.command("scrape-landsearch")
+@click.option("--criteria", "criteria_path", required=True,
+              type=click.Path(exists=True, dir_okay=False))
+@click.option("--store", "store_path", default="data/listings.jsonl", show_default=True,
+              type=click.Path(dir_okay=False))
+@click.option("--max-pages", default=3, show_default=True, type=int,
+              help="Max LandSearch result pages to scrape per state.")
+@click.option("--states", default=None,
+              help="Comma-separated state codes to scrape; defaults to criteria.yaml states.")
+def scrape_landsearch(
+    criteria_path: str, store_path: str, max_pages: int, states: str | None,
+) -> None:
+    """Scrape LandSearch via headless Chromium and append listings to the store."""
+    criteria = Criteria.from_yaml(criteria_path)
+    state_codes = (
+        [s.strip().upper() for s in states.split(",") if s.strip()]
+        if states else list(criteria.states)
+    )
+    cfg = LandSearchScraperConfig(max_pages_per_state=max_pages)
+    scraper = LandSearchScraper(state_codes, config=cfg)
+    store = ListingStore(store_path)
+    new = store.upsert(scraper.fetch())
+    click.echo(f"Scraped {len(state_codes)} state(s); +{len(new)} new listing(s) -> {store_path}")
+
+
+@main.command("scrape-landandfarm")
+@click.option("--criteria", "criteria_path", required=True,
+              type=click.Path(exists=True, dir_okay=False))
+@click.option("--store", "store_path", default="data/listings.jsonl", show_default=True,
+              type=click.Path(dir_okay=False))
+@click.option("--max-pages", default=5, show_default=True, type=int,
+              help="Max Land and Farm result pages to scrape per state.")
+@click.option("--min-acres", default=None, type=int,
+              help="Acreage floor used in URL filter; defaults to smallest acreage band in criteria.")
+@click.option("--states", default=None,
+              help="Comma-separated state codes to scrape; defaults to criteria.yaml states.")
+def scrape_landandfarm(
+    criteria_path: str, store_path: str, max_pages: int,
+    min_acres: int | None, states: str | None,
+) -> None:
+    """Scrape Land and Farm via headless Chromium with URL-level acreage filter."""
+    criteria = Criteria.from_yaml(criteria_path)
+    state_codes = (
+        [s.strip().upper() for s in states.split(",") if s.strip()]
+        if states else list(criteria.states)
+    )
+    if min_acres is None:
+        min_acres = int(min(b.min_acres for b in criteria.acreage_bands))
+    cfg = LandAndFarmScraperConfig(min_acres=min_acres, max_pages_per_state=max_pages)
+    scraper = LandAndFarmScraper(state_codes, config=cfg)
+    store = ListingStore(store_path)
+    new = store.upsert(scraper.fetch())
+    click.echo(
+        f"Scraped {len(state_codes)} state(s) (min {min_acres} ac); "
+        f"+{len(new)} new listing(s) -> {store_path}"
+    )
+
+
+@main.command("scrape-landwatch")
+@click.option("--criteria", "criteria_path", required=True,
+              type=click.Path(exists=True, dir_okay=False))
+@click.option("--store", "store_path", default="data/listings.jsonl", show_default=True,
+              type=click.Path(dir_okay=False))
+@click.option("--max-pages", default=5, show_default=True, type=int,
+              help="Max LandWatch result pages to scrape per state.")
+@click.option("--min-acres", default=None, type=int,
+              help="Acreage floor used in LandWatch URL filter; defaults to smallest acreage band in criteria.")
+@click.option("--states", default=None,
+              help="Comma-separated state codes to scrape; defaults to criteria.yaml states.")
+def scrape_landwatch(
+    criteria_path: str, store_path: str, max_pages: int,
+    min_acres: int | None, states: str | None,
+) -> None:
+    """Scrape LandWatch via headless Chromium with URL-level acreage filter."""
+    criteria = Criteria.from_yaml(criteria_path)
+    state_codes = (
+        [s.strip().upper() for s in states.split(",") if s.strip()]
+        if states else list(criteria.states)
+    )
+    if min_acres is None:
+        min_acres = int(min(b.min_acres for b in criteria.acreage_bands))
+    cfg = LandWatchScraperConfig(min_acres=min_acres, max_pages_per_state=max_pages)
+    scraper = LandWatchScraper(state_codes, config=cfg)
+    store = ListingStore(store_path)
+    new = store.upsert(scraper.fetch())
+    click.echo(
+        f"Scraped {len(state_codes)} state(s) (min {min_acres} ac); "
+        f"+{len(new)} new listing(s) -> {store_path}"
+    )
 
 
 @main.command()
