@@ -17,7 +17,7 @@ class _FakeGeocoder(Geocoder):
         return self._lookups.get(q)
 
 
-def _l(listing_id: str, lat=None, lon=None, county=None, state="MO") -> Listing:
+def _l(listing_id: str, lat=None, lon=None, county=None, state="MO", title="") -> Listing:
     return Listing(
         listing_id=listing_id,
         source="t",
@@ -28,6 +28,7 @@ def _l(listing_id: str, lat=None, lon=None, county=None, state="MO") -> Listing:
         price_usd=300_000.0,
         lat=lat,
         lon=lon,
+        title=title,
     )
 
 
@@ -59,3 +60,43 @@ def test_negative_result_cached(tmp_path):
     geo.enrich([_l("a", county="Nowhere")])
     raw = json.loads(cache.read_text())
     assert raw == {"Nowhere, MO, USA": None}
+
+
+def test_title_zip_preferred_over_county(tmp_path):
+    """ZIP centroid is ~5km accurate; county centroid is ~25km. When the
+    listing title carries a ZIP, prefer it."""
+    geo = _FakeGeocoder(
+        cache_path=tmp_path / "cache.json",
+        lookups={
+            "49102, MI, USA": (41.94, -86.36),     # Berrien Center ZIP
+            "Berrien, MI, USA": (42.10, -86.45),   # county centroid (further off)
+        },
+    )
+    listing = _l("a", county="Berrien", state="MI",
+                 title="Berrien Center, MI, 49102, Berrien County")
+    out = geo.enrich([listing])
+    assert out[0].lat == 41.94 and out[0].lon == -86.36
+
+
+def test_falls_back_to_county_when_no_zip(tmp_path):
+    geo = _FakeGeocoder(
+        cache_path=tmp_path / "cache.json",
+        lookups={"Texas, MO, USA": (37.30, -92.0)},
+    )
+    out = geo.enrich([_l("a", county="Texas", title="rural acreage MO")])
+    assert out[0].lat == 37.30
+
+
+def test_zip_with_plus_four_extension_still_extracted(tmp_path):
+    geo = _FakeGeocoder(
+        cache_path=tmp_path / "cache.json",
+        lookups={"49102, MI, USA": (41.94, -86.36)},
+    )
+    out = geo.enrich([_l("a", state="MI", title="Berrien Center 49102-1234")])
+    assert out[0].lat == 41.94
+
+
+def test_no_county_no_zip_skipped(tmp_path):
+    geo = _FakeGeocoder(cache_path=tmp_path / "cache.json", lookups={})
+    out = geo.enrich([_l("a", county=None, title="")])
+    assert out[0].lat is None and out[0].lon is None
