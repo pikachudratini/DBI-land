@@ -60,6 +60,13 @@ def score_price(listing: Listing, criteria: Criteria) -> CriterionScore:
     ppa = listing.price_per_acre
     cap_ppa = criteria.price.max_price_per_acre
     cap_total = criteria.price.max_total_price
+    # Reject scraped placeholders ("Call for Price" → price_usd=1.0 etc.).
+    # No legitimate parcel asks under $1000; treat as unknown-price → hard fail
+    # so call-for-price listings don't rank #1 with $0/ac.
+    if listing.price_usd < 1000:
+        return CriterionScore(
+            "price", 0.0, weight, f"${listing.price_usd:,.0f} not a real list price"
+        )
     if listing.price_usd > cap_total or ppa > cap_ppa:
         return CriterionScore(
             "price", 0.0, weight, f"${ppa:,.0f}/ac total ${listing.price_usd:,.0f} exceeds cap"

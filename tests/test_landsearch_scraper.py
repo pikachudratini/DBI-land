@@ -45,6 +45,18 @@ def test_parse_skips_auction_min_price(iowa_html):
     assert not (auction_ids & found_ids), "auction tiles with no firm price should be skipped"
 
 
+def test_parse_drops_sub_thousand_dollar_prices():
+    """Tiles whose only $-amount is a stray '$1' (call-for-price, financing
+    callouts, etc.) must be dropped, not stored with price_usd=1.0."""
+    html = """
+    <article class="preview">
+      <a href="/properties/foo-acreage-ne/9999999">listing</a>
+      <span>Make Offer | $1 reserve | 240 acres | Wayne County | Wayne, NE 68062</span>
+    </article>
+    """
+    assert parse_state_html(html, "NE") == []
+
+
 def test_parse_captures_county(iowa_html):
     listings = parse_state_html(iowa_html, "IA")
     by_id = {l.listing_id: l for l in listings}

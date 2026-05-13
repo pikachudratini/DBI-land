@@ -75,6 +75,13 @@ def test_price_caps_hard_fail(criteria):
     assert score_price(over_ppa, criteria).score == 0.0
 
 
+def test_price_below_1000_treated_as_unknown(criteria):
+    # "Call for Price" listings sometimes land in the store with price_usd=1.0.
+    # They must hard-fail price, not score as the best deal in the digest.
+    assert score_price(_l(acres=240, price_usd=1.0), criteria).score == 0.0
+    assert score_price(_l(acres=240, price_usd=0.0), criteria).score == 0.0
+
+
 def test_price_under_cap_has_positive_score(criteria):
     s = score_price(_l(acres=120, price_usd=400_000), criteria)
     assert 0 < s.score <= 1

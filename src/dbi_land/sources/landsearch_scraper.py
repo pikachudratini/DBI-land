@@ -84,8 +84,10 @@ def _parse_tile(art, state_code: str) -> Listing | None:
 
     # Tiles often carry callouts like "$20k drop" before the real price; take
     # the largest $-amount in the tile, which is always the list price.
+    # Floor at $1000 to ignore stray "$1", "$50/mo financing", etc. — a real
+    # parcel listing always asks at least four figures.
     price_values = [_parse_float(m.group(1)) for m in _PRICE_RE.finditer(text)]
-    price_values = [p for p in price_values if p is not None]
+    price_values = [p for p in price_values if p is not None and p >= 1000]
     price = max(price_values) if price_values else None
     acres_match = _ACRES_RE.search(text)
     if price is None or not acres_match:
