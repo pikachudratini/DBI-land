@@ -7,6 +7,7 @@ import click
 
 from dbi_land.config import Criteria
 from dbi_land.dashboard import write_dashboard
+from dbi_land.dedupe import dedupe_cross_source
 from dbi_land.digest import write_digest
 from dbi_land.elevation import ElevationEnricher
 from dbi_land.email_sender import EmailConfig, send_digest
@@ -69,6 +70,8 @@ def _append_digested(path: Path, keys: list[str]) -> None:
 @click.option("--out", "out_path", default="out/digest.html", show_default=True,
               type=click.Path(dir_okay=False))
 @click.option("--passing/--include-failing", default=True)
+@click.option("--dedupe/--no-dedupe", default=True,
+              help="Collapse cross-source duplicates (same state/county/acres/price).")
 @click.option("--power-geojson", default=None, type=click.Path(exists=True, dir_okay=False),
               help="Optional HIFLD-style transmission-line GeoJSON; enables the power score.")
 @click.option("--tower-geojson", default=None, type=click.Path(exists=True, dir_okay=False),
@@ -88,6 +91,7 @@ def run(
     digested_path: str,
     out_path: str,
     passing: bool,
+    dedupe: bool,
     power_geojson: str | None,
     tower_geojson: str | None,
     water_geojsons: tuple[str, ...],
@@ -104,6 +108,11 @@ def run(
     if not listings:
         click.echo("No listings to score (provide --csv or --store).", err=True)
         sys.exit(2)
+
+    if dedupe:
+        listings, dropped = dedupe_cross_source(listings)
+        if dropped:
+            click.echo(f"Dedupe: collapsed {dropped} cross-source duplicate(s).")
 
     digested_file = Path(digested_path)
     if new_only:
