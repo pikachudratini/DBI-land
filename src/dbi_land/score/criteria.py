@@ -27,17 +27,31 @@ def score_state(listing: Listing, criteria: Criteria) -> CriterionScore:
 
 def score_acreage(listing: Listing, criteria: Criteria) -> CriterionScore:
     weight = criteria.weight("acreage", 1.0)
-    band = criteria.best_band(listing.acres)
-    if band is None:
+    acres = listing.acres
+    if acres > criteria.sanity_max_acres:
         return CriterionScore(
-            "acreage", 0.0, weight, f"{listing.acres} ac outside any band"
+            "acreage", 0.0, weight,
+            f"{acres} ac exceeds sanity cap {criteria.sanity_max_acres:.0f} (likely bad data)",
+        )
+    band = criteria.best_band(acres)
+    if band is None:
+        # Above the top band but below sanity cap → score as top-band quality.
+        # Buyer prefers larger parcels, so don't silently drop legit big ranches.
+        top = max(criteria.acreage_bands, key=lambda b: b.max_acres)
+        if acres > top.max_acres:
+            return CriterionScore(
+                "acreage", min(top.weight, 1.0), weight,
+                f"{acres} ac above top band ({top.min_acres}-{top.max_acres})",
+            )
+        return CriterionScore(
+            "acreage", 0.0, weight, f"{acres} ac below smallest band"
         )
     span = max(band.max_acres - band.min_acres, 1.0)
     midpoint = (band.min_acres + band.max_acres) / 2.0
-    distance_from_mid = abs(listing.acres - midpoint) / (span / 2.0)
+    distance_from_mid = abs(acres - midpoint) / (span / 2.0)
     score = max(0.0, 1.0 - 0.4 * distance_from_mid) * band.weight
     return CriterionScore(
-        "acreage", min(score, 1.0), weight, f"{listing.acres} ac in band {band.min_acres}-{band.max_acres}"
+        "acreage", min(score, 1.0), weight, f"{acres} ac in band {band.min_acres}-{band.max_acres}"
     )
 
 

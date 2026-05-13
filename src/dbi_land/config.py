@@ -32,6 +32,7 @@ class Criteria:
     min_road_access_score: float = 0.0
     min_power_proximity_score: float = 0.0
     min_tower_proximity_score: float = 0.0
+    sanity_max_acres: float = 50_000.0
     weights: dict[str, float] = field(default_factory=dict)
     excluded_counties: tuple[str, ...] = ()
 
@@ -62,6 +63,7 @@ class Criteria:
             min_road_access_score=data.get("min_road_access_score", 0.0),
             min_power_proximity_score=data.get("min_power_proximity_score", 0.0),
             min_tower_proximity_score=data.get("min_tower_proximity_score", 0.0),
+            sanity_max_acres=data.get("sanity_max_acres", 50_000.0),
             weights=dict(data.get("weights", {})),
             excluded_counties=tuple(data.get("excluded_counties", [])),
         )
