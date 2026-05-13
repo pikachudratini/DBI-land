@@ -7,11 +7,13 @@ import pytest
 from dbi_land.config import Criteria
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+TEST_CRITERIA = FIXTURES / "test_criteria.yaml"
 
 
 @pytest.fixture
 def criteria() -> Criteria:
-    return Criteria.from_yaml(EXAMPLES / "criteria.yaml")
+    return Criteria.from_yaml(TEST_CRITERIA)
 
 
 @pytest.fixture

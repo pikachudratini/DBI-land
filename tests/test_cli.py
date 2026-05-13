@@ -6,11 +6,12 @@ from click.testing import CliRunner
 from dbi_land.cli import main
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
+TEST_CRITERIA = Path(__file__).resolve().parent / "fixtures" / "test_criteria.yaml"
 
 
 def test_show_criteria_runs():
     result = CliRunner().invoke(
-        main, ["show-criteria", "--criteria", str(EXAMPLES / "criteria.yaml")]
+        main, ["show-criteria", "--criteria", str(TEST_CRITERIA)]
     )
     assert result.exit_code == 0
     assert "States:" in result.output
@@ -24,7 +25,7 @@ def test_run_against_csv(tmp_path):
         main,
         [
             "run",
-            "--criteria", str(EXAMPLES / "criteria.yaml"),
+            "--criteria", str(TEST_CRITERIA),
             "--csv", str(EXAMPLES / "sample_listings.csv"),
             "--out", str(out),
             "--digested", str(digested),
@@ -53,7 +54,7 @@ def test_ingest_csv_then_run_new_only_filters(tmp_path):
         main,
         [
             "run",
-            "--criteria", str(EXAMPLES / "criteria.yaml"),
+            "--criteria", str(TEST_CRITERIA),
             "--store", str(store),
             "--new-only",
             "--out", str(out),
@@ -67,7 +68,7 @@ def test_ingest_csv_then_run_new_only_filters(tmp_path):
         main,
         [
             "run",
-            "--criteria", str(EXAMPLES / "criteria.yaml"),
+            "--criteria", str(TEST_CRITERIA),
             "--store", str(store),
             "--new-only",
             "--out", str(out),
@@ -100,7 +101,7 @@ def test_dashboard(tmp_path):
         main,
         [
             "dashboard",
-            "--criteria", str(EXAMPLES / "criteria.yaml"),
+            "--criteria", str(TEST_CRITERIA),
             "--store", str(store),
             "--out", str(out),
         ],
