@@ -8,12 +8,15 @@ import click
 from dbi_land.config import Criteria
 from dbi_land.dashboard import write_dashboard
 from dbi_land.digest import write_digest
+from dbi_land.elevation import ElevationEnricher
 from dbi_land.email_sender import EmailConfig, send_digest
 from dbi_land.geocode import Geocoder
 from dbi_land.gis import (
     PowerProximity,
+    TowerProximity,
     WaterProximity,
     score_power_proximity,
+    score_tower_proximity,
     score_water_proximity,
 )
 from dbi_land.score import score_listings
@@ -58,10 +61,15 @@ def _append_digested(path: Path, keys: list[str]) -> None:
 @click.option("--passing/--include-failing", default=True)
 @click.option("--power-geojson", default=None, type=click.Path(exists=True, dir_okay=False),
               help="Optional HIFLD-style transmission-line GeoJSON; enables the power score.")
-@click.option("--water-geojson", default=None, type=click.Path(exists=True, dir_okay=False),
-              help="Optional NHD-style perennial-flowline GeoJSON; enables the water score.")
+@click.option("--tower-geojson", default=None, type=click.Path(exists=True, dir_okay=False),
+              help="Optional FCC-ASR-style cell tower Point GeoJSON; enables the tower score.")
+@click.option("--water-geojson", "water_geojsons", multiple=True,
+              type=click.Path(exists=True, dir_okay=False),
+              help="NHD GeoJSON (flowline and/or point/spring); pass multiple times to merge.")
 @click.option("--geocode/--no-geocode", default=False,
               help="Geocode listings missing lat/lon via Nominatim before GIS scoring.")
+@click.option("--elevation/--no-elevation", "elevation", default=False,
+              help="Enrich listings with USGS 3DEP ground elevation (meters).")
 def run(
     criteria_path: str,
     csv_paths: tuple[str, ...],
@@ -71,8 +79,10 @@ def run(
     out_path: str,
     passing: bool,
     power_geojson: str | None,
-    water_geojson: str | None,
+    tower_geojson: str | None,
+    water_geojsons: tuple[str, ...],
     geocode: bool,
+    elevation: bool,
 ) -> None:
     """Score listings (from --csv or --store) and write the HTML digest."""
     criteria = Criteria.from_yaml(criteria_path)
@@ -97,11 +107,22 @@ def run(
         listings = Geocoder().enrich(listings)
         click.echo(f"Geocoded {before_geo} listing(s) without coordinates.")
 
+    if elevation:
+        before_elev = sum(
+            1 for l in listings
+            if l.lat is not None and l.lon is not None and "elevation_m" not in l.extras
+        )
+        listings = ElevationEnricher().enrich(listings)
+        click.echo(f"Looked up elevation for up to {before_elev} listing(s).")
+
     if power_geojson:
         pp = PowerProximity.from_geojson(power_geojson)
         listings = score_power_proximity(listings, pp)
-    if water_geojson:
-        wp = WaterProximity.from_geojson(water_geojson)
+    if tower_geojson:
+        tp = TowerProximity.from_geojson(tower_geojson)
+        listings = score_tower_proximity(listings, tp)
+    if water_geojsons:
+        wp = WaterProximity.from_paths(water_geojsons)
         listings = score_water_proximity(listings, wp)
 
     click.echo(f"Scoring {len(listings)} listing(s).")

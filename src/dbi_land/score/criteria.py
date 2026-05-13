@@ -76,10 +76,11 @@ def score_water(listing: Listing, criteria: Criteria) -> CriterionScore:
 
 
 def score_access(listing: Listing, criteria: Criteria) -> CriterionScore:
-    """Combined road access + power proximity, both from optional extras."""
+    """Combined road access + power/tower proximity, all from optional extras."""
     weight = criteria.weight("access", 1.0)
     road = _extras_score(listing, "road_access_score")
     power = _extras_score(listing, "power_proximity_score")
+    tower = _extras_score(listing, "tower_proximity_score")
     parts = []
     components: list[float] = []
     if road is not None:
@@ -92,6 +93,11 @@ def score_access(listing: Listing, criteria: Criteria) -> CriterionScore:
             return CriterionScore("access", 0.0, weight, f"power {power:.2f} below floor")
         components.append(power)
         parts.append(f"power {power:.2f}")
+    if tower is not None:
+        if tower < criteria.min_tower_proximity_score:
+            return CriterionScore("access", 0.0, weight, f"tower {tower:.2f} below floor")
+        components.append(tower)
+        parts.append(f"tower {tower:.2f}")
     if not components:
         return CriterionScore("access", 0.5, weight, "no GIS data; neutral")
     avg = sum(components) / len(components)

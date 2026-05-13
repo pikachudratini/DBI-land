@@ -43,6 +43,26 @@ a { color: #1a5; text-decoration: none; }
       <span><b>{{ c.name }}</b>: {{ "%.2f"|format(c.score) }} — {{ c.detail }}</span>
     {% endfor %}
   </div>
+  {% set ex = s.listing.extras %}
+  {% if ex.get('elevation_m') is not none
+     or ex.get('water_distance_m') is not none
+     or ex.get('power_distance_m') is not none
+     or ex.get('tower_distance_m') is not none %}
+  <div class="crit">
+    {% if ex.get('elevation_m') is not none %}
+      <span>elevation: {{ "%.0f"|format(ex['elevation_m']) }} m</span>
+    {% endif %}
+    {% if ex.get('water_distance_m') is not none %}
+      <span>water: {{ "%.0f"|format(ex['water_distance_m']) }} m</span>
+    {% endif %}
+    {% if ex.get('power_distance_m') is not none %}
+      <span>power: {{ "%.0f"|format(ex['power_distance_m']) }} m</span>
+    {% endif %}
+    {% if ex.get('tower_distance_m') is not none %}
+      <span>cell tower: {{ "%.0f"|format(ex['tower_distance_m']) }} m</span>
+    {% endif %}
+  </div>
+  {% endif %}
 </div>
 {% endfor %}
 </body></html>
