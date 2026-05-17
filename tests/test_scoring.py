@@ -51,11 +51,35 @@ def test_acreage_band_midpoint_scores_highest(criteria):
     assert out == 0.0
 
 
+def test_acreage_above_top_band_scores_as_top(criteria):
+    # Test fixture's top band is 321-640 with weight 0.65; sanity cap default 50k.
+    # A 1500-ac parcel is above all bands but well under sanity cap.
+    top = max(criteria.acreage_bands, key=lambda b: b.max_acres)
+    s = score_acreage(_l(acres=1500), criteria)
+    assert s.score > 0
+    assert s.score == min(top.weight, 1.0)
+    assert "above top band" in s.detail
+
+
+def test_acreage_above_sanity_cap_hard_fails(criteria):
+    # A 248k-ac parcel is real scraping garbage; default sanity cap is 50k.
+    s = score_acreage(_l(acres=248_292), criteria)
+    assert s.score == 0.0
+    assert "sanity cap" in s.detail
+
+
 def test_price_caps_hard_fail(criteria):
     over_total = _l(acres=400, price_usd=2_000_000)  # exceeds total cap
     over_ppa = _l(acres=10, price_usd=200_000)  # 20k/ac
     assert score_price(over_total, criteria).score == 0.0
     assert score_price(over_ppa, criteria).score == 0.0
+
+
+def test_price_below_1000_treated_as_unknown(criteria):
+    # "Call for Price" listings sometimes land in the store with price_usd=1.0.
+    # They must hard-fail price, not score as the best deal in the digest.
+    assert score_price(_l(acres=240, price_usd=1.0), criteria).score == 0.0
+    assert score_price(_l(acres=240, price_usd=0.0), criteria).score == 0.0
 
 
 def test_price_under_cap_has_positive_score(criteria):

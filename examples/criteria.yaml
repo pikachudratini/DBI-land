@@ -1,17 +1,18 @@
-states: [TX, OK, AR, MO, KS, IA, NE, MN, WI, IL, IN, OH, KY, TN, MS, AL, GA, NC, VA, PA, NY, MI, SD, ND]
+states: [TX, OK, AR, MO, KS, IA, NE, MN, WI, IL, IN, OH, KY, TN, MS, AL, GA, NC, VA, PA, NY, NJ, MI, SD, ND]
 
 acreage_bands:
-  - { min_acres: 40,  max_acres: 160, weight: 1.0 }
-  - { min_acres: 161, max_acres: 320, weight: 0.85 }
-  - { min_acres: 321, max_acres: 640, weight: 0.65 }
+  - { min_acres: 500,  max_acres: 800,  weight: 1.0 }
+  - { min_acres: 801,  max_acres: 1500, weight: 0.9 }
+  - { min_acres: 1501, max_acres: 3000, weight: 0.75 }
 
 price:
   max_per_acre: 6000
-  max_total: 1500000
+  max_total: 3000000
 
 min_water_score: 0.2
 min_road_access_score: 0.3
 min_power_proximity_score: 0.0
+min_tower_proximity_score: 0.0
 
 weights:
   state: 1.0

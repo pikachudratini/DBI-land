@@ -8,24 +8,27 @@ Score curve:
     distance >= max_m     ->  hard fail (0.0)
     in between            ->  linear ramp
 
-NHD Flowline FCode reference (a few of the most useful):
-    46006  perennial stream/river
-    46003  intermittent stream
-    46007  ephemeral stream
-    55800  artificial path
-A reasonable default is to keep only perennial flowlines (46006).
+NHD FCode reference (a few of the most useful):
+    46006  perennial stream/river   (line, NHDFlowline)
+    46003  intermittent stream      (line, NHDFlowline)
+    46007  ephemeral stream         (line, NHDFlowline)
+    45800  spring / seep            (point, NHDPoint)
+    55800  artificial path          (line)
+Defaults keep perennial flowlines and springs — the two year-round sources the
+buyer cares about.
 """
 from __future__ import annotations
 
 import math
 from dataclasses import replace
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Sequence
 
 from dbi_land.gis._distance import GeoFeature, load_features, nearest_distance_m
 from dbi_land.models import Listing
 
-DEFAULT_PERENNIAL_FCODES = (46006,)
+DEFAULT_PERENNIAL_FCODES = (46006, 45800)
+SPRING_FCODES = (45800,)
 
 
 class WaterProximity:
@@ -63,6 +66,37 @@ class WaterProximity:
 
         features = load_features(path, keep=keep)
         return cls(features=features, ideal_m=ideal_m, max_m=max_m)
+
+    @classmethod
+    def from_paths(
+        cls,
+        paths: Sequence[str | Path],
+        *,
+        fcode_field: str = "FCODE",
+        keep_fcodes: tuple[int, ...] = DEFAULT_PERENNIAL_FCODES,
+        ideal_m: float = 200.0,
+        max_m: float = 3000.0,
+    ) -> "WaterProximity":
+        """Load and merge features from multiple GeoJSON files.
+
+        Useful when perennial flowlines and spring points come from separate
+        NHD layers (NHDFlowline vs NHDPoint), as is typical.
+        """
+        keep_set = set(int(c) for c in keep_fcodes)
+
+        def keep(props: dict) -> bool:
+            v = props.get(fcode_field)
+            if v is None:
+                return True
+            try:
+                return int(v) in keep_set
+            except (TypeError, ValueError):
+                return True
+
+        merged: list[GeoFeature] = []
+        for p in paths:
+            merged.extend(load_features(p, keep=keep))
+        return cls(features=merged, ideal_m=ideal_m, max_m=max_m)
 
     def distance_m(self, lat: float, lon: float) -> float:
         return nearest_distance_m(

@@ -27,17 +27,31 @@ def score_state(listing: Listing, criteria: Criteria) -> CriterionScore:
 
 def score_acreage(listing: Listing, criteria: Criteria) -> CriterionScore:
     weight = criteria.weight("acreage", 1.0)
-    band = criteria.best_band(listing.acres)
-    if band is None:
+    acres = listing.acres
+    if acres > criteria.sanity_max_acres:
         return CriterionScore(
-            "acreage", 0.0, weight, f"{listing.acres} ac outside any band"
+            "acreage", 0.0, weight,
+            f"{acres} ac exceeds sanity cap {criteria.sanity_max_acres:.0f} (likely bad data)",
+        )
+    band = criteria.best_band(acres)
+    if band is None:
+        # Above the top band but below sanity cap → score as top-band quality.
+        # Buyer prefers larger parcels, so don't silently drop legit big ranches.
+        top = max(criteria.acreage_bands, key=lambda b: b.max_acres)
+        if acres > top.max_acres:
+            return CriterionScore(
+                "acreage", min(top.weight, 1.0), weight,
+                f"{acres} ac above top band ({top.min_acres}-{top.max_acres})",
+            )
+        return CriterionScore(
+            "acreage", 0.0, weight, f"{acres} ac below smallest band"
         )
     span = max(band.max_acres - band.min_acres, 1.0)
     midpoint = (band.min_acres + band.max_acres) / 2.0
-    distance_from_mid = abs(listing.acres - midpoint) / (span / 2.0)
+    distance_from_mid = abs(acres - midpoint) / (span / 2.0)
     score = max(0.0, 1.0 - 0.4 * distance_from_mid) * band.weight
     return CriterionScore(
-        "acreage", min(score, 1.0), weight, f"{listing.acres} ac in band {band.min_acres}-{band.max_acres}"
+        "acreage", min(score, 1.0), weight, f"{acres} ac in band {band.min_acres}-{band.max_acres}"
     )
 
 
@@ -46,6 +60,13 @@ def score_price(listing: Listing, criteria: Criteria) -> CriterionScore:
     ppa = listing.price_per_acre
     cap_ppa = criteria.price.max_price_per_acre
     cap_total = criteria.price.max_total_price
+    # Reject scraped placeholders ("Call for Price" → price_usd=1.0 etc.).
+    # No legitimate parcel asks under $1000; treat as unknown-price → hard fail
+    # so call-for-price listings don't rank #1 with $0/ac.
+    if listing.price_usd < 1000:
+        return CriterionScore(
+            "price", 0.0, weight, f"${listing.price_usd:,.0f} not a real list price"
+        )
     if listing.price_usd > cap_total or ppa > cap_ppa:
         return CriterionScore(
             "price", 0.0, weight, f"${ppa:,.0f}/ac total ${listing.price_usd:,.0f} exceeds cap"
@@ -76,10 +97,11 @@ def score_water(listing: Listing, criteria: Criteria) -> CriterionScore:
 
 
 def score_access(listing: Listing, criteria: Criteria) -> CriterionScore:
-    """Combined road access + power proximity, both from optional extras."""
+    """Combined road access + power/tower proximity, all from optional extras."""
     weight = criteria.weight("access", 1.0)
     road = _extras_score(listing, "road_access_score")
     power = _extras_score(listing, "power_proximity_score")
+    tower = _extras_score(listing, "tower_proximity_score")
     parts = []
     components: list[float] = []
     if road is not None:
@@ -92,6 +114,11 @@ def score_access(listing: Listing, criteria: Criteria) -> CriterionScore:
             return CriterionScore("access", 0.0, weight, f"power {power:.2f} below floor")
         components.append(power)
         parts.append(f"power {power:.2f}")
+    if tower is not None:
+        if tower < criteria.min_tower_proximity_score:
+            return CriterionScore("access", 0.0, weight, f"tower {tower:.2f} below floor")
+        components.append(tower)
+        parts.append(f"tower {tower:.2f}")
     if not components:
         return CriterionScore("access", 0.5, weight, "no GIS data; neutral")
     avg = sum(components) / len(components)

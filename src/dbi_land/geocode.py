@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 import urllib.parse
 import urllib.request
@@ -18,6 +19,22 @@ from typing import Iterable
 from dbi_land.models import Listing
 
 _DEFAULT_BASE = "https://nominatim.openstreetmap.org/search"
+_ZIP_RE = re.compile(r"(?<!\d)(\d{5})(?:-\d{4})?(?!\d)")
+
+
+def _query_for(listing: Listing) -> str | None:
+    """Build the most specific geocoder query a listing supports.
+
+    Prefer a 5-digit ZIP from the title (lands at the ZIP centroid, usually
+    5-10 km from a rural parcel — accurate enough for elevation and county-
+    level GIS). Fall back to (county, state) which is 20-30 km accurate.
+    """
+    zip_m = _ZIP_RE.search(listing.title or "")
+    if zip_m:
+        return f"{zip_m.group(1)}, {listing.state}, USA"
+    if listing.county:
+        return f"{listing.county}, {listing.state}, USA"
+    return None
 
 
 @dataclass
@@ -94,8 +111,8 @@ class Geocoder:
             if l.lat is not None and l.lon is not None:
                 out.append(l)
                 continue
-            q = ", ".join(p for p in (l.county, l.state, "USA") if p)
-            if not q.strip(", "):
+            q = _query_for(l)
+            if not q:
                 out.append(l)
                 continue
             coords = self.geocode(q)

@@ -98,3 +98,26 @@ def test_listing_in_ramp_zone(tmp_path):
     score, distance = wp.score(37.0072, -92.0)
     assert 0.0 < score < 1.0
     assert 700 < distance < 900
+
+
+def test_springs_kept_in_default_fcodes(tmp_path):
+    path = _write(tmp_path, _spring_geojson(-92.0, 37.0))
+    wp = WaterProximity.from_geojson(path)
+    assert len(wp.features) == 1
+    score, distance = wp.score(37.0, -92.0)
+    assert score == 1.0
+    assert distance < 5
+
+
+def test_from_paths_merges_flowlines_and_springs(tmp_path):
+    flow = _write(
+        tmp_path,
+        _flowline_geojson([[-110.0, 45.0], [-109.99, 45.0]]),  # far away
+        name="flow.geojson",
+    )
+    springs = _write(tmp_path, _spring_geojson(-92.0, 37.0), name="springs.geojson")
+    wp = WaterProximity.from_paths([flow, springs])
+    assert len(wp.features) == 2
+    # MO listing — only the spring is nearby
+    score, _ = wp.score(37.0, -92.0)
+    assert score == 1.0
