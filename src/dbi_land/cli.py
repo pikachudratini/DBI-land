@@ -87,9 +87,12 @@ def _append_digested(path: Path, keys: list[str]) -> None:
               type=click.Path(exists=True, dir_okay=False),
               help="NHD GeoJSON (flowline and/or point/spring); pass multiple times to merge.")
 @click.option("--geocode/--no-geocode", default=False,
-              help="Geocode listings missing lat/lon via Nominatim before GIS scoring.")
+              help="Geocode listings missing lat/lon via Nominatim.")
 @click.option("--elevation/--no-elevation", "elevation", default=False,
               help="Enrich listings with USGS 3DEP ground elevation (meters).")
+@click.option("--enrich-passing-only/--enrich-before-scoring", default=False,
+              help="Run --geocode/--elevation AFTER scoring on the passing set only. "
+                   "Much faster when most listings will fail other criteria.")
 def run(
     criteria_path: str,
     csv_paths: tuple[str, ...],
@@ -106,6 +109,7 @@ def run(
     water_geojsons: tuple[str, ...],
     geocode: bool,
     elevation: bool,
+    enrich_passing_only: bool,
 ) -> None:
     """Score listings (from --csv or --store) and write the HTML digest."""
     criteria = Criteria.from_yaml(criteria_path)
@@ -139,31 +143,42 @@ def run(
         listings = [l for l in listings if f"{l.source}:{l.listing_id}" not in already]
         click.echo(f"--new-only: filtered {before - len(listings)} previously-digested listing(s).")
 
-    if geocode:
-        before_geo = sum(1 for l in listings if l.lat is None or l.lon is None)
-        listings = Geocoder().enrich(listings)
-        click.echo(f"Geocoded {before_geo} listing(s) without coordinates.")
+    def _apply_enrichment(listings_in):
+        out = listings_in
+        if geocode:
+            before = sum(1 for l in out if l.lat is None or l.lon is None)
+            out = Geocoder().enrich(out)
+            click.echo(f"Geocoded {before} listing(s) without coordinates.")
+        if elevation:
+            before = sum(
+                1 for l in out
+                if l.lat is not None and l.lon is not None and "elevation_m" not in l.extras
+            )
+            out = ElevationEnricher().enrich(out)
+            click.echo(f"Looked up elevation for up to {before} listing(s).")
+        if power_geojson:
+            out = score_power_proximity(out, PowerProximity.from_geojson(power_geojson))
+        if tower_geojson:
+            out = score_tower_proximity(out, TowerProximity.from_geojson(tower_geojson))
+        if water_geojsons:
+            out = score_water_proximity(out, WaterProximity.from_paths(water_geojsons))
+        return out
 
-    if elevation:
-        before_elev = sum(
-            1 for l in listings
-            if l.lat is not None and l.lon is not None and "elevation_m" not in l.extras
-        )
-        listings = ElevationEnricher().enrich(listings)
-        click.echo(f"Looked up elevation for up to {before_elev} listing(s).")
-
-    if power_geojson:
-        pp = PowerProximity.from_geojson(power_geojson)
-        listings = score_power_proximity(listings, pp)
-    if tower_geojson:
-        tp = TowerProximity.from_geojson(tower_geojson)
-        listings = score_tower_proximity(listings, tp)
-    if water_geojsons:
-        wp = WaterProximity.from_paths(water_geojsons)
-        listings = score_water_proximity(listings, wp)
+    if not enrich_passing_only:
+        listings = _apply_enrichment(listings)
 
     click.echo(f"Scoring {len(listings)} listing(s).")
     scored = score_listings(listings, criteria, only_passing=passing)
+
+    if enrich_passing_only and (geocode or elevation or power_geojson or tower_geojson or water_geojsons):
+        enriched = _apply_enrichment([s.listing for s in scored])
+        from dataclasses import replace as _replace
+        by_key = {(l.source, l.listing_id): l for l in enriched}
+        scored = [
+            _replace(s, listing=by_key.get((s.listing.source, s.listing.listing_id), s.listing))
+            for s in scored
+        ]
+
     out = write_digest(scored, out_path)
     click.echo(f"Wrote {len(scored)} ranked listing(s) -> {out}")
 
