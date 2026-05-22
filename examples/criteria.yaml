@@ -1,7 +1,7 @@
-states: [TX, OK, AR, MO, KS, IA, NE, MN, WI, IL, IN, OH, KY, TN, MS, AL, GA, NC, VA, PA, NY, NJ, MI, SD, ND]
+states: [TX, OK, AR, MO, KS, IA, NE, MN, WI, IL, IN, OH, KY, TN, MS, AL, GA, NC, VA, PA, NY, NJ, MI, SD, ND, LA, FL, OR, WA]
 
 acreage_bands:
-  - { min_acres: 500,  max_acres: 800,  weight: 1.0 }
+  - { min_acres: 350,  max_acres: 800,  weight: 1.0 }
   - { min_acres: 801,  max_acres: 1500, weight: 0.9 }
   - { min_acres: 1501, max_acres: 3000, weight: 0.75 }
 

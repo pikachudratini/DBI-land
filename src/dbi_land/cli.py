@@ -161,7 +161,15 @@ def run(
         if tower_geojson:
             out = score_tower_proximity(out, TowerProximity.from_geojson(tower_geojson))
         if water_geojsons:
-            out = score_water_proximity(out, WaterProximity.from_paths(water_geojsons))
+            from dbi_land.gis.water import listings_to_bboxes
+            boxes = listings_to_bboxes(out)
+            if not boxes:
+                click.echo("water: no listings have coords yet; skipping water scoring.")
+            else:
+                wp = WaterProximity.from_paths(water_geojsons, listing_bboxes=boxes)
+                click.echo(f"water: bbox-filtered to {len(wp.features)} feature(s) "
+                           f"near {len(boxes)} listing(s).")
+                out = score_water_proximity(out, wp)
         return out
 
     if not enrich_passing_only:
