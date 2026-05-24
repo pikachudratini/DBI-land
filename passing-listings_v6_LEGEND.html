@@ -1,0 +1,193 @@
+<!doctype html><html><head><meta charset=utf-8><title>DBI Land — passing listings legend</title><style>body{font:14px/1.5 -apple-system,sans-serif;max-width:880px;margin:2em auto;padding:0 1em;color:#222}table{border-collapse:collapse;margin:1em 0}th,td{border:1px solid #ddd;padding:6px 10px;text-align:left;vertical-align:top}th{background:#f5f5f5}code{background:#f3f3f3;padding:1px 4px;border-radius:3px}h2{margin-top:1.5em}</style></head><body><h1>Legend — DBI Land passing-listings export</h1>
+<p>Each row in the companion sheet is one farmland parcel that passed every
+hard-fail criterion. Higher score values are always better. <code>_distance_m</code>
+columns are raw meters (lower = closer = usually better).</p>
+<h2>Identity &amp; link</h2>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rank</code></td>
+<td>1-based rank by total_score (sheet's natural order).</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td>Which scraper found it: <code>landsearch</code>, <code>landwatch</code>, <code>landandfarm</code>.</td>
+</tr>
+<tr>
+<td><code>listing_id</code></td>
+<td>The source's own ID for this parcel.</td>
+</tr>
+<tr>
+<td><code>url</code></td>
+<td>Direct link to the listing page — click to view.</td>
+</tr>
+</tbody>
+</table>
+<h2>Location &amp; physical</h2>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>state</code>, <code>county</code></td>
+<td>Self-explanatory.</td>
+</tr>
+<tr>
+<td><code>acres</code></td>
+<td>Parcel acreage. Targets: 350-800 ac (preferred), 801-1500 (ok), 1501-3000 (acceptable).</td>
+</tr>
+<tr>
+<td><code>price_usd</code></td>
+<td>Asking price. Hard cap at $3,000,000 total.</td>
+</tr>
+<tr>
+<td><code>price_per_acre</code></td>
+<td>Computed. Hard cap at $6,000/ac.</td>
+</tr>
+<tr>
+<td><code>lat</code>, <code>lon</code></td>
+<td>Decimal degrees, geocoded from the listing's state+county via OSM Nominatim. NOT parcel-exact — usually the county centroid or nearest town, accurate to ~5-30 km. Use for regional sorting, not driving directions.</td>
+</tr>
+<tr>
+<td><code>elevation_m</code></td>
+<td>USGS 3DEP ground elevation at (lat, lon), in meters.</td>
+</tr>
+</tbody>
+</table>
+<h2>GIS proximity scores (0.0 = far/bad, 1.0 = ideal)</h2>
+<p>All proximity scores are inverse-distance curves: at or below <code>ideal_m</code> →
+1.0, at or above <code>max_m</code> → 0.0, linear ramp between.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Source</th>
+<th>Ideal / Max</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>water_score</code></td>
+<td>USGS NHD perennial streams + springs (FCodes 46006, 45800)</td>
+<td>200 m / 3 km</td>
+<td>Year-round water access. Hard-fail floor in criteria: min 0.2.</td>
+</tr>
+<tr>
+<td><code>water_distance_m</code></td>
+<td>—</td>
+<td>—</td>
+<td>Raw meters to nearest perennial water feature.</td>
+</tr>
+<tr>
+<td><code>power_score</code></td>
+<td>HIFLD transmission lines (≥69 kV)</td>
+<td>50 m / 1.6 km</td>
+<td>Closer = cheaper grid hookup. NOTE: too close is also annoying (line easements over your land) — sort and use judgment.</td>
+</tr>
+<tr>
+<td><code>power_distance_m</code></td>
+<td>—</td>
+<td>—</td>
+<td>Raw meters to nearest transmission line.</td>
+</tr>
+<tr>
+<td><code>tower_score</code></td>
+<td>OpenStreetMap <code>man_made=communications_tower / mast</code></td>
+<td>50 m / 5 km</td>
+<td>Higher score = closer to cell coverage.</td>
+</tr>
+<tr>
+<td><code>tower_distance_m</code></td>
+<td>—</td>
+<td>—</td>
+<td>Raw meters to nearest tagged tower. OSM coverage is patchy in rural areas, so a high distance may mean "no nearby tower OR no nearby tagged tower."</td>
+</tr>
+<tr>
+<td><code>road_access_score</code></td>
+<td>—</td>
+<td>—</td>
+<td>Reserved column. No road-access enricher is wired yet, so this is usually blank.</td>
+</tr>
+</tbody>
+</table>
+<h2>Per-criterion score components</h2>
+<p>The total_score is a weighted average of these five. Each is in [0.0, 1.0].
+A score of 0.0 on any one = hard-fail = the row was dropped (so for passing
+listings these are all &gt; 0).</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Weight (from criteria.yaml)</th>
+<th>What it scores</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>state_score</code></td>
+<td>1.0</td>
+<td>1.0 if state is on the target list (TX, OK, AR, MO, KS, IA, NE, MN, WI, IL, IN, OH, KY, TN, MS, AL, GA, NC, VA, PA, NY, NJ, MI, SD, ND, LA, FL, OR, WA), 0.0 otherwise.</td>
+</tr>
+<tr>
+<td><code>acreage_score</code></td>
+<td>1.5</td>
+<td>Peaks at the midpoint of the matched band; falls off toward band edges. Multiplied by the band's own weight (1.0 / 0.9 / 0.75 for the three bands).</td>
+</tr>
+<tr>
+<td><code>price_score</code></td>
+<td>2.0</td>
+<td>Headroom under the $/ac cap: <code>1 - price_per_acre / 6000</code>. Cheaper = higher.</td>
+</tr>
+<tr>
+<td><code>water_crit_score</code></td>
+<td>1.5</td>
+<td>Same as <code>water_score</code> above, just inside the criteria framework.</td>
+</tr>
+<tr>
+<td><code>road_crit_score</code></td>
+<td>1.0</td>
+<td>Same as <code>road_access_score</code> (currently always at the floor since no enricher).</td>
+</tr>
+</tbody>
+</table>
+<h2>Computed totals</h2>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>total_score</code></td>
+<td>Weighted average of all five criterion scores. Sheet is sorted by this descending; higher = better fit to your full criteria.</td>
+</tr>
+</tbody>
+</table>
+<h2>Suggested sorts in the sheet</h2>
+<ul>
+<li><strong>Cheapest viable land:</strong> sort <code>price_per_acre</code> ascending.</li>
+<li><strong>Biggest ranches:</strong> sort <code>acres</code> descending.</li>
+<li><strong>Best water access:</strong> sort <code>water_distance_m</code> ascending (or <code>water_score</code> descending).</li>
+<li><strong>Lowest infrastructure cost:</strong> sort <code>power_distance_m</code> ascending.</li>
+<li><strong>Most remote (off-grid feel):</strong> sort <code>tower_distance_m</code> descending, then filter <code>water_score &gt; 0.5</code>.</li>
+<li><strong>Best overall fit:</strong> leave it on default <code>total_score</code> descending.</li>
+</ul>
+<h2>Caveats</h2>
+<ul>
+<li><code>lat</code>/<code>lon</code> are geocoded centroids (county or nearest town), NOT parcel-exact. All proximity scores inherit that ~5-30 km regional fuzziness.</li>
+<li><code>tower_distance_m</code> reflects only OSM-tagged towers — rural under-tagging means a large number may mean "no nearby tower OR no one's mapped it yet."</li>
+<li>Scrapers run weekly; a row's presence here only proves the listing existed on its last scrape (within the 14-day freshness window).</li>
+</ul></body></html>
